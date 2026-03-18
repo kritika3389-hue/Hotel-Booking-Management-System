@@ -1,87 +1,106 @@
 import java.util.*;
 
 /**
- * Use Case 7: Add-On Service Selection
+ * Project: Book My Stay App
+ * Use Case 8: Booking History & Reporting
  * Implementation Class: U7
  */
 public class U7 {
 
-    // 1. Add-On Service Model
+    // 1. Reservation Model (Core Entity)
+    static class Reservation {
+        private final String reservationId;
+        private final String guestName;
+        private final String roomType;
+        private final double basePrice;
+
+        public Reservation(String reservationId, String guestName, String roomType, double basePrice) {
+            this.reservationId = reservationId;
+            this.guestName = guestName;
+            this.roomType = roomType;
+            this.basePrice = basePrice;
+        }
+
+        public String getReservationId() { return reservationId; }
+        public double getBasePrice() { return basePrice; }
+
+        @Override
+        public String toString() {
+            return String.format("ID: %s | Guest: %s | Room: %s | Base: $%.2f",
+                    reservationId, guestName, roomType, basePrice);
+        }
+    }
+
+    // 2. Add-On Service Model (From Use Case 7)
     static class AddOnService {
-        private final String serviceId;
         private final String name;
         private final double price;
 
-        public AddOnService(String serviceId, String name, double price) {
-            this.serviceId = serviceId;
+        public AddOnService(String name, double price) {
             this.name = name;
             this.price = price;
         }
 
         public double getPrice() { return price; }
-        public String getName() { return name; }
-
         @Override
-        public String toString() {
-            return String.format("%s ($%.2f)", name, price);
+        public String toString() { return name + " ($" + price + ")"; }
+    }
+
+    // 3. Booking History & Reporting Service
+    static class BookingHistory {
+        // List preserves insertion order for chronological tracking
+        private final List<Reservation> confirmedBookings = new ArrayList<>();
+        private final Map<String, List<AddOnService>> serviceHistory = new HashMap<>();
+
+        // Adds a confirmed booking to history (Persistence Mindset)
+        public void recordBooking(Reservation res, List<AddOnService> services) {
+            confirmedBookings.add(res);
+            if (services != null && !services.isEmpty()) {
+                serviceHistory.put(res.getReservationId(), new ArrayList<>(services));
+            }
+        }
+
+        // Generates a summary report for the Admin
+        public void generateOperationalReport() {
+            System.out.println("\n========== ADMIN OPERATIONAL REPORT ==========");
+            double totalRevenue = 0;
+
+            for (Reservation res : confirmedBookings) {
+                double addOnTotal = 0;
+                List<AddOnService> extras = serviceHistory.getOrDefault(res.getReservationId(), Collections.emptyList());
+
+                for (AddOnService s : extras) addOnTotal += s.getPrice();
+
+                double grandTotal = res.getBasePrice() + addOnTotal;
+                totalRevenue += grandTotal;
+
+                System.out.println(res);
+                System.out.println("   + Add-ons: " + extras);
+                System.out.printf("   > Total for Booking: $%.2f%n", grandTotal);
+                System.out.println("----------------------------------------------");
+            }
+
+            System.out.printf("TOTAL SYSTEM REVENUE: $%.2f%n", totalRevenue);
+            System.out.println("TOTAL CONFIRMED RESERVATIONS: " + confirmedBookings.size());
+            System.out.println("==============================================\n");
         }
     }
 
-    // 2. Add-On Service Manager
-    static class AddOnServiceManager {
-        // Map<ReservationID, List<Services>> - Efficient lookup and one-to-many mapping
-        private final Map<String, List<AddOnService>> reservationServices = new HashMap<>();
-
-        // Adds a service to a specific reservation
-        public void addServiceToReservation(String reservationId, AddOnService service) {
-            reservationServices
-                    .computeIfAbsent(reservationId, k -> new ArrayList<>())
-                    .add(service);
-        }
-
-        // Cost Aggregation - Calculates total cost for selected services
-        public double calculateTotalAddOnCost(String reservationId) {
-            return reservationServices.getOrDefault(reservationId, Collections.emptyList())
-                    .stream()
-                    .mapToDouble(AddOnService::getPrice)
-                    .sum();
-        }
-
-        public List<AddOnService> getServicesForReservation(String reservationId) {
-            return reservationServices.getOrDefault(reservationId, Collections.emptyList());
-        }
-    }
-
-    // 3. Main Execution Logic
+    // 4. Main Execution
     public static void main(String[] args) {
-        AddOnServiceManager manager = new AddOnServiceManager();
+        BookingHistory history = new BookingHistory();
 
-        // Instantiate available services
-        AddOnService massage = new AddOnService("S1", "Deep Tissue Massage", 85.0);
-        AddOnService miniBar = new AddOnService("S2", "Mini Bar Access", 40.0);
-        AddOnService valet = new AddOnService("S3", "Valet Parking", 25.0);
+        // Simulation 1: Alice Books a Deluxe Room with Spa
+        Reservation res1 = new Reservation("RES-101", "Alice", "Deluxe", 200.0);
+        List<AddOnService> aliceServices = Arrays.asList(new AddOnService("Spa", 150.0));
+        history.recordBooking(res1, aliceServices);
 
-        // Scenario: Guest with Reservation "RES-99" selects multiple services
-        String resId = "RES-99";
+        // Simulation 2: Bob Books a Suite with Breakfast and WiFi
+        Reservation res2 = new Reservation("RES-102", "Bob", "Suite", 400.0);
+        List<AddOnService> bobServices = Arrays.asList(
+                new AddOnService("Breakfast", 25.0),
+                new AddOnService("Premium WiFi", 15.0)
+        );
+        history.recordBooking(res2, bobServices);
 
-        System.out.println("=== Use Case 7: Add-On Service Selection ===");
-        System.out.println("Processing for Reservation ID: " + resId);
-
-        // Add services to the mapping
-        manager.addServiceToReservation(resId, massage);
-        manager.addServiceToReservation(resId, valet);
-        manager.addServiceToReservation(resId, miniBar);
-
-        // Retrieve and Display Results
-        List<AddOnService> selected = manager.getServicesForReservation(resId);
-        double totalCost = manager.calculateTotalAddOnCost(resId);
-
-        System.out.println("\nSelected Services:");
-        selected.forEach(s -> System.out.println(" >> " + s));
-
-        System.out.println("-------------------------------------------");
-        System.out.printf("Total Additional Cost: $%.2f%n", totalCost);
-        System.out.println("-------------------------------------------");
-        System.out.println("Status: Core booking/allocation logic untouched.");
-    }
-}
+        // Simulation
