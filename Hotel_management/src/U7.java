@@ -2,105 +2,108 @@ import java.util.*;
 
 /**
  * Project: Book My Stay App
- * Use Case 8: Booking History & Reporting
+ * Use Case 9: Error Handling & Validation
  * Implementation Class: U7
  */
 public class U7 {
 
-    // 1. Reservation Model (Core Entity)
+    // --- Custom Exceptions for Domain-Specific Errors ---
+    static class InvalidRoomTypeException extends Exception {
+        public InvalidRoomTypeException(String message) { super(message); }
+    }
+
+    static class InsufficientInventoryException extends Exception {
+        public InsufficientInventoryException(String message) { super(message); }
+    }
+
+    // 1. Reservation Model
     static class Reservation {
         private final String reservationId;
         private final String guestName;
         private final String roomType;
-        private final double basePrice;
 
-        public Reservation(String reservationId, String guestName, String roomType, double basePrice) {
+        public Reservation(String reservationId, String guestName, String roomType) {
             this.reservationId = reservationId;
             this.guestName = guestName;
             this.roomType = roomType;
-            this.basePrice = basePrice;
         }
-
-        public String getReservationId() { return reservationId; }
-        public double getBasePrice() { return basePrice; }
 
         @Override
         public String toString() {
-            return String.format("ID: %s | Guest: %s | Room: %s | Base: $%.2f",
-                    reservationId, guestName, roomType, basePrice);
+            return String.format("ResID: %s | Guest: %s | Room: %s", reservationId, guestName, roomType);
         }
     }
 
-    // 2. Add-On Service Model (From Use Case 7)
-    static class AddOnService {
-        private final String name;
-        private final double price;
+    // 2. Booking Validator & Manager
+    static class BookingManager {
+        private final Map<String, Integer> inventory = new HashMap<>();
+        private final List<Reservation> history = new ArrayList<>();
 
-        public AddOnService(String name, double price) {
-            this.name = name;
-            this.price = price;
+        public BookingManager() {
+            // Initialize system state
+            inventory.put("DELUXE", 2);
+            inventory.put("SUITE", 1);
         }
 
-        public double getPrice() { return price; }
-        @Override
-        public String toString() { return name + " ($" + price + ")"; }
-    }
+        /**
+         * Core Logic with Guard Clauses and Fail-Fast Design
+         */
+        public void processBooking(String id, String name, String type)
+                throws InvalidRoomTypeException, InsufficientInventoryException {
 
-    // 3. Booking History & Reporting Service
-    static class BookingHistory {
-        // List preserves insertion order for chronological tracking
-        private final List<Reservation> confirmedBookings = new ArrayList<>();
-        private final Map<String, List<AddOnService>> serviceHistory = new HashMap<>();
+            String roomTypeKey = type.toUpperCase();
 
-        // Adds a confirmed booking to history (Persistence Mindset)
-        public void recordBooking(Reservation res, List<AddOnService> services) {
-            confirmedBookings.add(res);
-            if (services != null && !services.isEmpty()) {
-                serviceHistory.put(res.getReservationId(), new ArrayList<>(services));
-            }
-        }
-
-        // Generates a summary report for the Admin
-        public void generateOperationalReport() {
-            System.out.println("\n========== ADMIN OPERATIONAL REPORT ==========");
-            double totalRevenue = 0;
-
-            for (Reservation res : confirmedBookings) {
-                double addOnTotal = 0;
-                List<AddOnService> extras = serviceHistory.getOrDefault(res.getReservationId(), Collections.emptyList());
-
-                for (AddOnService s : extras) addOnTotal += s.getPrice();
-
-                double grandTotal = res.getBasePrice() + addOnTotal;
-                totalRevenue += grandTotal;
-
-                System.out.println(res);
-                System.out.println("   + Add-ons: " + extras);
-                System.out.printf("   > Total for Booking: $%.2f%n", grandTotal);
-                System.out.println("----------------------------------------------");
+            // Rule 1: Validate Room Type
+            if (!inventory.containsKey(roomTypeKey)) {
+                throw new InvalidRoomTypeException("Error: Room type '" + type + "' does not exist in our system.");
             }
 
-            System.out.printf("TOTAL SYSTEM REVENUE: $%.2f%n", totalRevenue);
-            System.out.println("TOTAL CONFIRMED RESERVATIONS: " + confirmedBookings.size());
-            System.out.println("==============================================\n");
+            // Rule 2: Validate Inventory (Prevent negative state)
+            if (inventory.get(roomTypeKey) <= 0) {
+                throw new InsufficientInventoryException("Error: No " + roomTypeKey + " rooms available.");
+            }
+
+            // If validation passes, update system state
+            inventory.put(roomTypeKey, inventory.get(roomTypeKey) - 1);
+            Reservation newRes = new Reservation(id, name, roomTypeKey);
+            history.add(newRes);
+
+            System.out.println("SUCCESS: Booking confirmed for " + name + " [" + roomTypeKey + "]");
+        }
+
+        public void showReport() {
+            System.out.println("\n--- Final System State ---");
+            System.out.println("Remaining Inventory: " + inventory);
+            System.out.println("Confirmed Bookings: " + history.size());
         }
     }
 
-    // 4. Main Execution
+    // 3. Main Execution with Graceful Failure Handling
     public static void main(String[] args) {
-        BookingHistory history = new BookingHistory();
+        BookingManager manager = new BookingManager();
 
-        // Simulation 1: Alice Books a Deluxe Room with Spa
-        Reservation res1 = new Reservation("RES-101", "Alice", "Deluxe", 200.0);
-        List<AddOnService> aliceServices = Arrays.asList(new AddOnService("Spa", 150.0));
-        history.recordBooking(res1, aliceServices);
+        // Array of booking attempts: [ID, Guest, RoomType]
+        String[][] attempts = {
+                {"R1", "Alice", "Deluxe"},   // Valid
+                {"R2", "Bob", "Penthouse"},  // Invalid Room Type (Exception)
+                {"R3", "Charlie", "Suite"},  // Valid
+                {"R4", "David", "Suite"},    // Insufficient Inventory (Exception)
+                {"R5", "Eve", "Deluxe"}      // Valid
+        };
 
-        // Simulation 2: Bob Books a Suite with Breakfast and WiFi
-        Reservation res2 = new Reservation("RES-102", "Bob", "Suite", 400.0);
-        List<AddOnService> bobServices = Arrays.asList(
-                new AddOnService("Breakfast", 25.0),
-                new AddOnService("Premium WiFi", 15.0)
-        );
-        history.recordBooking(res2, bobServices);
+        System.out.println("=== Use Case 9: Validation & Error Handling ===\n");
 
-        // Simulation
+        for (String[] a : attempts) {
+            try {
+                manager.processBooking(a[0], a[1], a[2]);
+            } catch (InvalidRoomTypeException | InsufficientInventoryException e) {
+                // Graceful Failure Handling: Log error and keep the app running
+                System.err.println("VALIDATION FAILED: " + e.getMessage());
+            } catch (Exception e) {
+                System.err.println("UNKNOWN ERROR: " + e.getMessage());
+            }
+        }
+
+        manager.showReport();
+    }
+}
