@@ -2,105 +2,126 @@ import java.util.*;
 
 /**
  * Project: Book My Stay App
- * Use Case 8: Booking History & Reporting
+ * Use Case 10: Booking Cancellation & Inventory Rollback
  * Implementation Class: U7
  */
 public class U7 {
 
-    // 1. Reservation Model (Core Entity)
+    // --- Custom Exceptions ---
+    static class BookingNotFoundException extends Exception {
+        public BookingNotFoundException(String message) { super(message); }
+    }
+
+    // 1. Reservation Model (Enhanced with RoomID for tracking)
     static class Reservation {
-        private final String reservationId;
+        private final String resId;
         private final String guestName;
         private final String roomType;
-        private final double basePrice;
+        private final String assignedRoomId;
 
-        public Reservation(String reservationId, String guestName, String roomType, double basePrice) {
-            this.reservationId = reservationId;
+        public Reservation(String resId, String guestName, String roomType, String assignedRoomId) {
+            this.resId = resId;
             this.guestName = guestName;
             this.roomType = roomType;
-            this.basePrice = basePrice;
+            this.assignedRoomId = assignedRoomId;
         }
 
-        public String getReservationId() { return reservationId; }
-        public double getBasePrice() { return basePrice; }
+        public String getResId() { return resId; }
+        public String getRoomType() { return roomType; }
+        public String getAssignedRoomId() { return assignedRoomId; }
 
         @Override
         public String toString() {
-            return String.format("ID: %s | Guest: %s | Room: %s | Base: $%.2f",
-                    reservationId, guestName, roomType, basePrice);
+            return String.format("[%s] %s - %s (Room: %s)", resId, guestName, roomType, assignedRoomId);
         }
     }
 
-    // 2. Add-On Service Model (From Use Case 7)
-    static class AddOnService {
-        private final String name;
-        private final double price;
+    // 2. Cancellation Service & Inventory Manager
+    static class BookingManager {
+        private final Map<String, Integer> inventory = new HashMap<>();
+        private final Map<String, Reservation> activeBookings = new HashMap<>();
 
-        public AddOnService(String name, double price) {
-            this.name = name;
-            this.price = price;
+        // Stack for LIFO Rollback: Tracks recently released room IDs
+        private final Stack<String> releasedRoomsStack = new Stack<>();
+
+        public BookingManager() {
+            inventory.put("DELUXE", 5);
+            inventory.put("SUITE", 2);
         }
 
-        public double getPrice() { return price; }
-        @Override
-        public String toString() { return name + " ($" + price + ")"; }
-    }
-
-    // 3. Booking History & Reporting Service
-    static class BookingHistory {
-        // List preserves insertion order for chronological tracking
-        private final List<Reservation> confirmedBookings = new ArrayList<>();
-        private final Map<String, List<AddOnService>> serviceHistory = new HashMap<>();
-
-        // Adds a confirmed booking to history (Persistence Mindset)
-        public void recordBooking(Reservation res, List<AddOnService> services) {
-            confirmedBookings.add(res);
-            if (services != null && !services.isEmpty()) {
-                serviceHistory.put(res.getReservationId(), new ArrayList<>(services));
-            }
+        public void createBooking(String id, String name, String type, String roomId) {
+            Reservation res = new Reservation(id, name, type, roomId);
+            activeBookings.put(id, res);
+            inventory.put(type, inventory.get(type) - 1);
+            System.out.println("Confirmed: " + res);
         }
 
-        // Generates a summary report for the Admin
-        public void generateOperationalReport() {
-            System.out.println("\n========== ADMIN OPERATIONAL REPORT ==========");
-            double totalRevenue = 0;
-
-            for (Reservation res : confirmedBookings) {
-                double addOnTotal = 0;
-                List<AddOnService> extras = serviceHistory.getOrDefault(res.getReservationId(), Collections.emptyList());
-
-                for (AddOnService s : extras) addOnTotal += s.getPrice();
-
-                double grandTotal = res.getBasePrice() + addOnTotal;
-                totalRevenue += grandTotal;
-
-                System.out.println(res);
-                System.out.println("   + Add-ons: " + extras);
-                System.out.printf("   > Total for Booking: $%.2f%n", grandTotal);
-                System.out.println("----------------------------------------------");
+        /**
+         * State Reversal & Inventory Rollback Logic
+         */
+        public void cancelBooking(String reservationId) throws BookingNotFoundException {
+            // 1. Validation of Cancellation Request
+            if (!activeBookings.containsKey(reservationId)) {
+                throw new BookingNotFoundException("Cancellation Failed: Reservation " + reservationId + " not found.");
             }
 
-            System.out.printf("TOTAL SYSTEM REVENUE: $%.2f%n", totalRevenue);
-            System.out.println("TOTAL CONFIRMED RESERVATIONS: " + confirmedBookings.size());
-            System.out.println("==============================================\n");
+            // 2. Retrieve booking details for rollback
+            Reservation resToCancel = activeBookings.remove(reservationId);
+            String roomType = resToCancel.getRoomType();
+            String roomId = resToCancel.getAssignedRoomId();
+
+            // 3. LIFO Rollback: Record released room ID in stack
+            releasedRoomsStack.push(roomId);
+
+            // 4. Inventory Restoration: Increment count immediately
+            inventory.put(roomType, inventory.get(roomType) + 1);
+
+            System.out.println("SUCCESS: Cancelled " + reservationId + ". Room " + roomId + " returned to pool.");
+        }
+
+        public void displayStatus() {
+            System.out.println("\n--- System Status ---");
+            System.out.println("Active Bookings: " + activeBookings.values());
+            System.out.println("Inventory Levels: " + inventory);
+            System.out.println("Recently Released Rooms (Stack): " + releasedRoomsStack);
+            System.out.println("---------------------\n");
         }
     }
 
-    // 4. Main Execution
+    // 3. Main Execution
     public static void main(String[] args) {
-        BookingHistory history = new BookingHistory();
+        BookingManager manager = new BookingManager();
 
-        // Simulation 1: Alice Books a Deluxe Room with Spa
-        Reservation res1 = new Reservation("RES-101", "Alice", "Deluxe", 200.0);
-        List<AddOnService> aliceServices = Arrays.asList(new AddOnService("Spa", 150.0));
-        history.recordBooking(res1, aliceServices);
+        System.out.println("=== Use Case 10: Booking Cancellation & Rollback ===\n");
 
-        // Simulation 2: Bob Books a Suite with Breakfast and WiFi
-        Reservation res2 = new Reservation("RES-102", "Bob", "Suite", 400.0);
-        List<AddOnService> bobServices = Arrays.asList(
-                new AddOnService("Breakfast", 25.0),
-                new AddOnService("Premium WiFi", 15.0)
-        );
-        history.recordBooking(res2, bobServices);
+        // Initial Bookings
+        manager.createBooking("RES-001", "Alice", "DELUXE", "D-101");
+        manager.createBooking("RES-002", "Bob", "SUITE", "S-501");
+        manager.displayStatus();
 
-        // Simulation
+        // Scenario 1: Valid Cancellation
+        try {
+            manager.cancelBooking("RES-001");
+        } catch (BookingNotFoundException e) {
+            System.err.println(e.getMessage());
+        }
+
+        // Scenario 2: Duplicate/Invalid Cancellation (Validation check)
+        try {
+            System.out.println("Attempting to cancel RES-001 again...");
+            manager.cancelBooking("RES-001");
+        } catch (BookingNotFoundException e) {
+            System.err.println(e.getMessage());
+        }
+
+        // Scenario 3: Another Booking and Cancellation
+        manager.createBooking("RES-003", "Charlie", "DELUXE", "D-102");
+        try {
+            manager.cancelBooking("RES-003");
+        } catch (BookingNotFoundException e) {
+            System.err.println(e.getMessage());
+        }
+
+        manager.displayStatus();
+    }
+}
