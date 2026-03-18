@@ -21,8 +21,13 @@ public class U7 {
             this.basePrice = basePrice;
         }
 
-        public String getReservationId() { return reservationId; }
-        public double getBasePrice() { return basePrice; }
+        public String getReservationId() {
+            return reservationId;
+        }
+
+        public double getBasePrice() {
+            return basePrice;
+        }
 
         @Override
         public String toString() {
@@ -41,9 +46,14 @@ public class U7 {
             this.price = price;
         }
 
-        public double getPrice() { return price; }
+        public double getPrice() {
+            return price;
+        }
+
         @Override
-        public String toString() { return name + " ($" + price + ")"; }
+        public String toString() {
+            return name + " ($" + price + ")";
+        }
     }
 
     // 3. Booking History & Reporting Service
@@ -102,5 +112,7 @@ public class U7 {
                 new AddOnService("Premium WiFi", 15.0)
         );
         history.recordBooking(res2, bobServices);
+    }
+}
 
-        // Simulation
+// Simulation
